@@ -67,6 +67,7 @@ if (Test-ServerUp $base) {
     Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
   }
   Start-Sleep -Milliseconds 400
+  Clear-StaleRuntimeLock
 
   $logOut = Join-Path $Root "server.out.log"
   $logErr = Join-Path $Root "server.err.log"

@@ -53,8 +53,19 @@ impl RuntimeMetadata {
 
     pub fn process_is_alive(&self) -> bool {
         let system = System::new_all();
-        system.process(Pid::from_u32(self.pid)).is_some()
+        match system.process(Pid::from_u32(self.pid)) {
+            Some(process) => is_server_process_name(&process.name().to_string_lossy()),
+            None => false,
+        }
     }
+}
+
+/// Windows переиспользует PID. Совпадение номера недостаточно: это должен быть сам сервер.
+pub fn is_server_process_name(name: &str) -> bool {
+    let base = name.rsplit(['\\', '/']).next().unwrap_or(name).trim();
+    let lower = base.to_ascii_lowercase();
+    let lower = lower.strip_suffix(".exe").unwrap_or(&lower);
+    lower == "lsp-skill-server"
 }
 
 pub fn compute_connect_url(listen_host: &str, port: u16) -> String {
@@ -67,7 +78,17 @@ pub fn compute_connect_url(listen_host: &str, port: u16) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::compute_connect_url;
+    use super::{compute_connect_url, is_server_process_name};
+
+    #[test]
+    fn server_name_ignores_recycled_pid_owners() {
+        assert!(is_server_process_name("lsp-skill-server"));
+        assert!(is_server_process_name("lsp-skill-server.exe"));
+        assert!(is_server_process_name(r"D:\bin\lsp-skill-server.exe"));
+        assert!(!is_server_process_name("ShellHost"));
+        assert!(!is_server_process_name("ShellHost.exe"));
+        assert!(!is_server_process_name("java"));
+    }
 
     #[test]
     fn maps_wildcard_host_to_loopback() {

@@ -16,6 +16,29 @@ function Get-RuntimePath {
   return (Join-Path $env:LOCALAPPDATA "Infostart\LspSkill\data\runtime.json")
 }
 
+function Clear-StaleRuntimeLock {
+  $runtime = Get-RuntimePath
+  if (-not (Test-Path $runtime)) { return }
+  $ownerPid = $null
+  $ownerName = $null
+  try {
+    $meta = Get-Content $runtime -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($meta.pid) { $ownerPid = [int]$meta.pid }
+  } catch {
+    Remove-Item $runtime -Force
+    Write-Host "Удалён повреждённый runtime.json"
+    return
+  }
+  if ($ownerPid) {
+    $owner = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+    if ($owner) { $ownerName = $owner.ProcessName }
+  }
+  if ($ownerName -eq "lsp-skill-server") { return }
+  $who = if ($ownerName) { "$ownerName" } else { "процесс уже завершён" }
+  Write-Host "Сбрасываю устаревший runtime.json (pid $ownerPid = $who)"
+  Remove-Item $runtime -Force
+}
+
 function Find-Java {
   $cmd = Get-Command java -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
@@ -33,7 +56,17 @@ function Find-Java {
 }
 
 function Test-JavaVersion([string]$JavaExe) {
-  $out = & $JavaExe -version 2>&1 | Out-String
+  # java -version пишет в stderr. При ErrorActionPreference=Stop PowerShell
+  # превращает это в NativeCommandError и обрывает скрипт.
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $out = & $JavaExe -version 2>&1 | ForEach-Object { $_.ToString() } | Out-String
+  } catch {
+    $out = $_.Exception.Message
+  } finally {
+    $ErrorActionPreference = $prev
+  }
   if ($out -match 'version "(\d+)') {
     $major = [int]$Matches[1]
     if ($major -eq 1 -and $out -match 'version "1\.(\d+)') {
