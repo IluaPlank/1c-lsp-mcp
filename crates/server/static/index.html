@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>1c-mcp</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <h1>1c-mcp</h1>
+        <p class="subtitle">Управление проектами BSL Language Server</p>
+      </div>
+      <div class="header-actions">
+        <span id="server-hint" class="muted">MCP: :9010 · UI: :4000</span>
+        <button type="button" id="btn-settings" class="btn btn-ghost">Настройки сервера</button>
+        <button type="button" id="btn-reload" class="btn btn-ghost">Обновить</button>
+        <button type="button" id="btn-new" class="btn btn-primary">Новый проект</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <h2>Проекты</h2>
+        <div id="project-list" class="project-list">Загрузка…</div>
+      </aside>
+
+      <main class="main">
+        <div id="empty-state" class="empty-state">
+          <p>Выберите проект слева или создайте новый.</p>
+          <p class="hint">Чтобы агент мог работать с кодом: выберите проект → <strong>Запустить</strong> → дождитесь статуса <strong>Готов</strong>.</p>
+        </div>
+
+        <form id="project-form" class="project-form hidden" autocomplete="off">
+          <div class="form-head">
+            <div>
+              <h2 id="form-title">Проект</h2>
+              <div id="status-row" class="status-row"></div>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-start" class="btn btn-success">Запустить</button>
+              <button type="button" id="btn-stop" class="btn btn-warn">Остановить</button>
+              <button type="submit" class="btn btn-primary">Сохранить</button>
+              <button type="button" id="btn-delete" class="btn btn-danger">Удалить</button>
+            </div>
+          </div>
+
+          <div id="progress-wrap" class="progress-wrap hidden">
+            <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+            <p id="progress-text" class="muted"></p>
+          </div>
+          <p id="wait-hint" class="muted hidden">Лимита по времени нет. Нажмите «Остановить», чтобы прервать ожидание.</p>
+
+          <div id="error-banner" class="error-banner hidden"></div>
+
+          <label>
+            <span>Название</span>
+            <input id="f-name" name="name" required />
+          </label>
+
+          <label>
+            <span>Корень проекта <em>(project_root_path — папка с .cursor/mcp.json)</em></span>
+            <input id="f-project-root" name="project_root_path" required placeholder="D:\...\Проект" />
+          </label>
+
+          <label>
+            <span>Корень конфигурации <em>(root_path — где лежат .bsl / Configuration)</em></span>
+            <input id="f-root" name="root_path" required placeholder="D:\...\Проект\Конфигурация" />
+          </label>
+
+          <label>
+            <span>JVM args <em>(опционально)</em></span>
+            <input id="f-jvm" name="jvm_args" placeholder="-Xmx4g" />
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" id="f-debug" name="debug" />
+            <span>Debug LSP</span>
+          </label>
+
+          <details class="advanced">
+            <summary>BSL Language Server config (JSON)</summary>
+            <textarea id="f-bsl" name="bsl_config" rows="10" spellcheck="false"></textarea>
+          </details>
+
+          <div class="meta-box">
+            <div><span class="muted">ID проекта</span> <code id="f-id">—</code>
+              <button type="button" id="btn-copy-id" class="btn btn-ghost btn-sm">Копировать</button>
+            </div>
+            <p class="hint">В <code>.cursor/mcp.json</code> корня проекта укажите этот ID в заголовке <code>x-project-id</code>.</p>
+          </div>
+
+          <details class="logs-box">
+            <summary>Логи LSP</summary>
+            <div class="logs-toolbar">
+              <button type="button" id="btn-refresh-logs" class="btn btn-ghost btn-sm">Обновить логи</button>
+              <button type="button" id="btn-clear-logs" class="btn btn-ghost btn-sm">Очистить</button>
+            </div>
+            <pre id="logs">—</pre>
+          </details>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="settings-dialog" class="dialog hidden" role="dialog" aria-labelledby="settings-title">
+    <form id="settings-form" class="dialog-card" autocomplete="off">
+      <div class="form-head">
+        <h2 id="settings-title">Настройки сервера</h2>
+        <button type="button" id="btn-settings-close" class="btn btn-ghost btn-sm">Закрыть</button>
+      </div>
+
+      <label class="checkbox">
+        <input type="checkbox" id="s-toon" />
+        <span>TOON для ответов агента</span>
+      </label>
+      <p class="hint">По умолчанию включён для всех проектов: длинные списки приходят короче. Снимите галочку, когда ответ нужно читать как JSON. Действует сразу, без перезапуска.</p>
+
+      <label>
+        <span>Уровень лога</span>
+        <select id="s-log-level">
+          <option value="error">error</option>
+          <option value="warn">warn</option>
+          <option value="info">info</option>
+          <option value="debug">debug</option>
+          <option value="trace">trace</option>
+        </select>
+      </label>
+      <p class="hint">События кэша (hit, miss, eviction) пишутся на уровне debug. Новый уровень применяется после перезапуска сервера.</p>
+
+      <p id="settings-note" class="hint hidden"></p>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

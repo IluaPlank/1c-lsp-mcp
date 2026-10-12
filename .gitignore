@@ -1,0 +1,7 @@
+/target/
+/dist/
+/jars/
+/.cursor/
+/.agents/
+.codex
+*.log
